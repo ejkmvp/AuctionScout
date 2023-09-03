@@ -1,0 +1,33 @@
+Hypixel Skyblock
+
+Scans for BIN auctions sold significantly below their average value and attempts to purchase those items
+
+AuctionScanner.py:
+	Scans all BIN auctions, collects their sell prices and item types into a file. 
+	This should be run for at least a few days before using the rest of the program.
+	
+AuctionScout.py:
+	Constantly scans new BIN auctions for prices significantly below their means
+	(which come from AuctionScanner.py). Once a deal is found, the /viewauction
+	command is copied to clipboard and pyautogui is used to execute the command in the game.
+	
+autoAuctionPurchase.js:
+	A LiquidBounce 1.8.9 script that detects auction house purchase prompts and sends packets
+	confirming the item's purchase
+	
+Use Instructions: WARNING: This is only a POC and should not be run with malicious intent
+	1. 	Run AuctionScanner.py on some sort of device that can stay on 24/7
+	
+	2. 	Pipe the output file (ahData.json) to the same folder as AuctionScout.py.
+		Right now, I have auctionscout trying to grab the file over the internet from a local IP.
+	
+	3.	Adjust the pyautogui.moveTo method call to the confirm button when attempting to buy on 
+		the auction house
+	
+	4.	Add autoAuctionPurchase.js to the scripts folder in LiquidBounce
+	
+	5.	Head in game and setup some sort of anti-afk method
+	
+	6.	Purchase a booster cookie to use the /viewauction command
+	
+	7.	Enable the autoAuctionPurchase and run AuctionScout.py
