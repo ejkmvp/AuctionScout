@@ -32,6 +32,10 @@ cursor.execute("SELECT itemName FROM auctionscanner.auctionitems GROUP BY itemNa
 
 # for each item get all the sell prices and find the lower quartile
 for item in cursor.fetchall():
+    if item[0] == "PET":
+        cursor = mydb.cursor()
+        cursor.execute("SELECT petName FROM auctionscanner.auctionitems WHERE itemName = 'PET' GROUP BY petName HAVING COUNT(*) > 5")
+        print(cursor.fetchall())
     cursor = mydb.cursor()
     cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE itemName = '{item[0]}'")
     priceList = []
