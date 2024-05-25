@@ -1,9 +1,11 @@
 import mysql.connector
 import json
-import nbt
+from nbt import nbt
 import io
 import gzip
 import base64
+import requests
+import time
 
 def getEndedAuctionData():
     retryCount = 5
@@ -22,20 +24,35 @@ def getEndedAuctionData():
 # attempt connection to database
 mydb = mysql.connector.connect(
     host="localhost",
-    user="dbUsername",
-    password="dbPassword",
-    database="databaseName"
+    user="auctionscanner",
+    password="auctionpassword",
+    database="auctionscanner"
 )
 
-# send a request every 40 ish seconds, check if the timestamp is new, and if so, add the data to the database
-nextScanTime = time.time() + 40
+# send a request every 50 ish seconds, check if the timestamp is new, and if so, add the data to the database
+nextScanTime = time.time()
 previousTimestamp = "d"
+nextCleanupTime = time.time()
 
 # main loop
 while True:
+    #check if its cleanup time
+    if time.time() >= nextCleanupTime:
+        print("running clean operation")
+        nextCleanupTime = time.time() + 43200
+        try:
+            cursor = mydb.cursor()
+            cursor.execute(f"DELETE FROM auctionscanner.auctionitems WHERE timeSold < FROM_UNIXTIME({int(time.time()) - 604800})")
+            mydb.commit()
+            print("Rows Deleted:", cursor.rowcount)
+        except Exception as e:
+            print("Error during old data delete")
+            print(e)
+
     # wait for next scan time
     if time.time() < nextScanTime:
         continue
+
 
     #attempt to grab json data from endpoint
     print("Attempting to connect to ended auctions endpoint")
@@ -68,14 +85,17 @@ while True:
         continue
     previousTimestamp = currentTimestamp
 
+    # set next time interval (50 seconds from current time)
+    nextScanTime = time.time() + 50
+
     # process each item
     for item in auctionData["auctions"]:
         # make sure it's a BIN offer
         if not item["bin"]:
             continue
-        auctionId = item["auctionId"]
+        auctionId = item["auction_id"]
         sellPrice = item["price"]
-        timeSold = item["timestamp"]
+        timeSold = int(item["timestamp"]) / 1000  # convert to seconds
         attribData = nbt.NBTFile(buffer=io.BytesIO(gzip.decompress(base64.b64decode(item["item_bytes"]))))["i"][0]
         itemName = str(attribData["tag"]["ExtraAttributes"]["id"])
 
@@ -90,7 +110,9 @@ while True:
             # exclude if pet level is greater than 10
             if int(str(attribData["tag"]["display"]["Name"]).split("Lvl ")[1].split("]")[0]) > 10:
                 continue
-            petInfo = eval(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
+            #print(attribData["tag"]["ExtraAttributes"]["petInfo"])
+            petInfo = json.loads(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
+            #petInfo = eval(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
             # extract pet name and rarity
             petName = petInfo["type"]
             petRarity = petInfo["tier"]
@@ -124,22 +146,26 @@ while True:
             # print('hot potato')
             continue
 
+        # ------------------------------------------------------------------------ #
+
         # run insertion into database
-        cursor = mydb.connection.cursor()
-        if itemName == "PET":
-            # pet insertion
-            cursor.execute(f"INSERT INTO auctionscanner.itemsales (auctionId, sellPrice, timeSold, itemName, petName, petRarity) VALUES ('{auctionId}', {sellPrice}, {timeSold}, '{itemName}', '{petName}', '{petRarity}')")
-        elif itemName == "ENCHANTED_BOOK":
-            cursor.execute(f"INSERT INTO auctionscanner.itemsales (auctionId, sellPrice, timeSold, itemName, enchantmentName, enchantmentLevel) VALUES ('{auctionId}', {sellPrice}, {timeSold}, '{itemName}', '{enchantmentName}', '{enchantmentLevel}')")
-        else:
-            cursor.execute(f"INSERT INTO auctionscanner.itemsales (auctionId, sellPrice, timeSold, itemName) VALUES ('{auctionId}', {sellPrice}, {timeSold}, '{itemName}')")
+        cursor = mydb.cursor()
         try:
-            mydb.connection.commit()
+            if itemName == "PET":
+                # pet insertion
+                cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName, petName, petRarity) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}', '{petName}', '{petRarity}')")
+            elif itemName == "ENCHANTED_BOOK":
+                cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName, enchantmentName, enchantmentLevel) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}', '{enchantmentName}', '{int(enchantmentLevel)}')")
+            else:
+                cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}')")
+
+            mydb.commit()
         except Exception as e:
             print("error during database insertion")
             print(e)
             print("skipping iteration")
-
+    print("Finished scanning items")
+    print("Next scan is in", nextScanTime - time.time(), "seconds.")
 
 
 
