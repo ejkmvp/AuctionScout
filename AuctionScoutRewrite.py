@@ -12,13 +12,13 @@ def selectionStrat(itemList):
     itemList.sort()
     return itemList[int(len(itemList)/4)]
 
-MIN_OCCURENCES = 10
-MIN_PET_OCCURENCES = 5
-MIN_BOOK_OCCURENCES = 5
+MIN_OCCURENCES = 30
+MIN_PET_OCCURENCES = 10
+MIN_BOOK_OCCURENCES = 10
 MIN_TARGET_PRICE = 100000
 
 IGNORE_LIST = []
-IGNORE_PET_LIST = [""]
+IGNORE_PET_LIST = []
 
 
 #overall goals of this script:
