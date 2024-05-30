@@ -7,6 +7,8 @@ import base64
 import requests
 import time
 
+#TODO account for starred items (i dont exactly remember what makes an item starred)
+
 def getEndedAuctionData():
     retryCount = 5
     while retryCount != 0:

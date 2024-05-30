@@ -7,6 +7,20 @@ import base64
 import requests
 import time
 
+
+def getAuctionData(pageNum):
+    retryCount = 5
+    while retryCount != 0:
+        auctionRequest = requests.get("https://api.hypixel.net/v2/skyblock/auctions?page=" + str(pageNum))
+        if auctionRequest.status_code != 200:
+            print("Error with request: ", auctionRequest.status_code)
+            retryCount -= 1
+            time.sleep(1)
+            continue
+        ahData = json.loads(auctionRequest.text)
+        return ahData
+    return Exception("Request failed after five retries")
+
 # Selection Strategy. This one just takes the lower quartile
 def selectionStrat(itemList):
     itemList.sort()
@@ -127,4 +141,59 @@ print(petTargetPrice)
 print("Begin Scan Phase")
 
 # TODO at some point, try to time up requests so that they send right when hypixel updates the endpoint
+nextScanTime = time.time()
+previousTimeStamp = "d"
+while True:
+    currentPage = 0
+    if time.time() < nextScanTime:
+        continue
+
+    try:
+        auctionData = getAuctionData(currentPage)
+    except Exception as e:
+        print("Failed to grab auction data")
+        print(e)
+        print("Trying again in 2 seconds")
+        time.sleep(2)
+        continue
+
+    #make sure we are looking at new data
+    if auctionData["lastUpdated"] == previousTimeStamp:
+        print("Data already grabbed, waiting 5 seconds")
+        time.sleep(5)
+        continue
+
+    for item in auctionData["auctions"]:
+        # skip non bins
+        if not item["bin"]:
+            continue
+
+        # skip already
+        if item["highest_bid_amount"] != 0:
+            continue
+
+        attribData = nbt.NBTFile(buffer=io.BytesIO(gzip.decompress(base64.b64decode(item["item_bytes"]))))["i"][0]
+        itemName = str(attribData["tag"]["ExtraAttributes"]["id"])
+        itemPrice = item["starting_bid"]
+
+        # check if item is a pet
+        if itemName == "PET":
+            petInfo = json.loads(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
+            petName = petInfo["type"]
+            petRarity = petInfo["tier"]
+            fullPetName = petName + "-" + petRarity
+            if fullPetName not in petTargetPrice.keys():
+                continue
+            if itemPrice < 0.25 * petTargetPrice[fullPetName]:
+                print("Attempt purchase of item with auctionID:")
+                print(item["uuid"])
+        else:
+            if itemName not in targetPrice.keys():
+                continue
+            if itemPrice < 0.25 * targetPrice[itemName]:
+                print("Attempt purchase of item with auctionID:")
+                print(item["uuid"])
+    print("finished scanning, waiting 60 seconds")
+    nextScanTime = time.time() + 60
+
 
