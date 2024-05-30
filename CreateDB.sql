@@ -11,8 +11,6 @@ CREATE TABLE `auctionscanner`.`auctionitems` (
   `sellPrice` INT NOT NULL,
   `timeSold` DATETIME NOT NULL,
   `itemName` VARCHAR(45) NOT NULL,
-  `enchantmentName` VARCHAR(45) NULL,
-  `enchantmentLevel` INT NULL,
   `petName` VARCHAR(45) NULL,
   `petRarity` VARCHAR(45) NULL,
   PRIMARY KEY (`auctionId`));

@@ -14,11 +14,13 @@ def selectionStrat(itemList):
 
 MIN_OCCURENCES = 30
 MIN_PET_OCCURENCES = 10
-MIN_BOOK_OCCURENCES = 10
 MIN_TARGET_PRICE = 100000
 
 IGNORE_LIST = []
 IGNORE_PET_LIST = []
+
+ALLOWED_LIST = []
+ALLOWED_PET_LIST = []
 
 
 #overall goals of this script:
@@ -37,7 +39,7 @@ mydb = mysql.connector.connect(
 
 targetPrice = {}
 petTargetPrice = {}
-
+timer = time.time()
 print("Processing Data from Database")
 # first, get a list of itemNames that have more than MIN_OCCURENCES occurences in the db
 cursor = mydb.cursor()
@@ -62,23 +64,51 @@ for item in cursor.fetchall():
     for result in cursor.fetchall():
         priceList.append(int(result[1]))
     targetPrice[item[0]] = selectionStrat(priceList)
-print("Finished Processing")
+print(f"Finished Processing, took {time.time() - timer} seconds")
 
-#ignore items
-for item in IGNORE_LIST:
-    if item in targetPrice.keys():
-        targetPrice.pop(item)
-for item in IGNORE_PET_LIST:
-    if "-" in item:
-        if item in petTargetPrice.keys():
-            petTargetPrice.pop(item)
-    else:
-        removeKeyList = []
-        for petKey in petTargetPrice.keys():
-            if item in petKey:
-                removeKeyList.append(petKey)
-        for petKey in removeKeyList:
-            petTargetPrice.pop(petKey)
+if len(ALLOWED_LIST) != 0:
+    print("Item Whitelist detected! Ignoring Item Ignorelist. Applying...")
+    newTargetPrice = {}
+    for item in ALLOWED_LIST:
+        if item in targetPrice.keys():
+            newTargetPrice[item] = targetPrice[item]
+    targetPrice = newTargetPrice
+else:
+    print("Applying Item Ignorelist")
+    # ignore items
+    for item in IGNORE_LIST:
+        if item in targetPrice.keys():
+            targetPrice.pop(item)
+
+if len(ALLOWED_PET_LIST) != 0:
+    print("Pet Whitelist detected! Ignoring Pet Ignorelist. Applying...")
+    newPetTargetPrice = {}
+    for item in ALLOWED_PET_LIST:
+        if "-" in item:
+            if item in petTargetPrice.keys():
+                newPetTargetPrice[item] = petTargetPrice[item]
+        else:
+            addKeyList = []
+            for petKey in petTargetPrice.keys():
+                if item == petKey.split("-")[0]:
+                    addKeyList.append(petKey)
+            for item in addKeyList:
+                newPetTargetPrice[item] = petTargetPrice[item]
+    petTargetPrice = newPetTargetPrice
+else:
+    print("Applying Pet Ignorelist")
+    #ignore pets
+    for item in IGNORE_PET_LIST:
+        if "-" in item:
+            if item in petTargetPrice.keys():
+                petTargetPrice.pop(item)
+        else:
+            removeKeyList = []
+            for petKey in petTargetPrice.keys():
+                if item == petKey.split("-")[0]:
+                    removeKeyList.append(petKey)
+            for petKey in removeKeyList:
+                petTargetPrice.pop(petKey)
 
 # remove items below minimum target price
 targetPriceKeys = list(targetPrice.keys())
@@ -96,5 +126,5 @@ print("\n")
 print(petTargetPrice)
 print("Begin Scan Phase")
 
-
+# TODO at some point, try to time up requests so that they send right when hypixel updates the endpoint
 

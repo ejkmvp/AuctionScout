@@ -117,16 +117,6 @@ while True:
             petName = petInfo["type"]
             petRarity = petInfo["tier"]
 
-        # handle enchanted books
-        elif itemName == "ENCHANTED_BOOK":
-            enchantList = attribData["tag"]["ExtraAttributes"]["enchantments"]
-            # skip if the book has more than one enchantment
-            if len(enchantList) > 1:
-                continue
-            firstEnchant = str(enchantList.keys()[0])
-            enchantmentName = firstEnchant
-            enchantmentLevel = enchantList[firstEnchant]
-
         # exclude other items that have enchantments
         elif 'enchantments' in attribData["tag"]["ExtraAttributes"].keys():
             continue
@@ -154,11 +144,9 @@ while True:
             if itemName == "PET":
                 # pet insertion
                 cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName, petName, petRarity) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}', '{petName}', '{petRarity}')")
-            elif itemName == "ENCHANTED_BOOK":
-                cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName, enchantmentName, enchantmentLevel) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}', '{enchantmentName}', '{int(enchantmentLevel)}')")
             else:
+                # normal insertion
                 cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}')")
-
             mydb.commit()
         except Exception as e:
             print("error during database insertion")
