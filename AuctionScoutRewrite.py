@@ -7,6 +7,8 @@ import base64
 import requests
 import time
 
+#TODO save the first item found in the auctions search and stop looking for items on the next search at that location
+
 
 def getAuctionData(pageNum):
     retryCount = 5
@@ -30,7 +32,7 @@ MIN_OCCURENCES = 30
 MIN_PET_OCCURENCES = 10
 MIN_TARGET_PRICE = 100000
 
-IGNORE_LIST = []
+IGNORE_LIST = ["ATTRIBUTE_SHARD"]
 IGNORE_PET_LIST = []
 
 ALLOWED_LIST = []
@@ -187,12 +189,16 @@ while True:
             if itemPrice < 0.25 * petTargetPrice[fullPetName]:
                 print("Attempt purchase of item with auctionID:")
                 print(item["uuid"])
+                print(item)
+                print(fullPetName)
         else:
             if itemName not in targetPrice.keys():
                 continue
             if itemPrice < 0.25 * targetPrice[itemName]:
                 print("Attempt purchase of item with auctionID:")
                 print(item["uuid"])
+                print(item)
+                print(itemName)
     print("finished scanning, waiting 60 seconds")
     nextScanTime = time.time() + 60
 
