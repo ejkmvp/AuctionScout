@@ -6,10 +6,11 @@ import gzip
 import base64
 import requests
 import time
+import os
 
 #TODO save the first item found in the auctions search and stop looking for items on the next search at that location
 
-
+ipcFile = "X:/Users/ethan/Desktop/Minecraft/Hypixel/ipcFile"
 def getAuctionData(pageNum):
     retryCount = 5
     while retryCount != 0:
@@ -28,8 +29,20 @@ def selectionStrat(itemList):
     itemList.sort()
     return itemList[int(len(itemList)/4)]
 
+
+def writeToIpcFile(uuid, timestamp):
+    ipcData = uuid + "," + str(timestamp)
+    # wait for file to be empty
+    while os.path.getsize(ipcFile) != 0:
+        print("IPC file has data! waiting for it to clear")
+    print("IPC file is empty, adding data")
+    f = open(ipcFile, "w")
+    f.write(ipcData)
+    f.close()
+
+
 MIN_OCCURENCES = 30
-MIN_PET_OCCURENCES = 10
+MIN_PET_OCCURENCES = 25
 MIN_TARGET_PRICE = 100000
 
 IGNORE_LIST = ["ATTRIBUTE_SHARD"]
@@ -191,6 +204,7 @@ while True:
                 print(item["uuid"])
                 print(item)
                 print(fullPetName)
+                writeToIpcFile(item["uuid"], item["start"])
         else:
             if itemName not in targetPrice.keys():
                 continue
@@ -199,7 +213,10 @@ while True:
                 print(item["uuid"])
                 print(item)
                 print(itemName)
+                writeToIpcFile(item["uuid"], item["start"])
     print("finished scanning, waiting 60 seconds")
     nextScanTime = time.time() + 60
+
+    #TODO Write the uuid and time (in ms) to a file
 
 
