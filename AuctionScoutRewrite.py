@@ -8,6 +8,8 @@ import requests
 import time
 import os
 
+
+#TODO add caching
 #TODO save the first item found in the auctions search and stop looking for items on the next search at that location
 
 ipcFile = "X:/Users/ethan/Desktop/Minecraft/Hypixel/ipcFile"
@@ -45,7 +47,10 @@ MIN_OCCURENCES = 30
 MIN_PET_OCCURENCES = 25
 MIN_TARGET_PRICE = 100000
 
-IGNORE_LIST = ["ATTRIBUTE_SHARD"]
+IGNORE_LIST = ["ATTRIBUTE_SHARD", "FERVOR_HELMET", "FERVOR_CHESTPLATE", "FERVOR_LEGGINGS", "FERVOR_BOOTS", "CRIMSON_HELMET", "CRIMSON_CHESTPLATE", "CRIMSON_LEGGINGS", "CRIMSON_BOOTS",
+               "AURORA_HELMET", "AURORA_CHESTPLATE", "AURORA_LEGGINGS", "AURORA_BOOTS", "HOLLOW_HELMET", "HOLLOW_CHESTPLATE", "HOLLOW_LEGGINGS", "HOLLOW_BOOTS",
+               "RAMPART_HELMET", "RAMPART_CHESTPLATE", "RAMPART_LEGGINGS", "RAMPART_BOOTS", "REKINDLED_EMBER_HELMET", "REKINDLED_EMBER_CHESTPLATE", "REKINDLED_EMBER_LEGGINGS", "REKINDLED_EMBER_BOOTS",
+               "TERROR_HELMET", "TERROR_CHESTPLATE", "TERROR_LEGGINGS", "TERROR_BOOTS"]
 IGNORE_PET_LIST = []
 
 ALLOWED_LIST = []
@@ -69,86 +74,106 @@ mydb = mysql.connector.connect(
 targetPrice = {}
 petTargetPrice = {}
 timer = time.time()
-print("Processing Data from Database")
-# first, get a list of itemNames that have more than MIN_OCCURENCES occurences in the db
-cursor = mydb.cursor()
-cursor.execute(f"SELECT itemName FROM auctionscanner.auctionitems GROUP BY itemName HAVING COUNT(*) > {MIN_OCCURENCES}")
 
-# for each item get all the sell prices and find the lower quartile
-for item in cursor.fetchall():
-    # pet exception
-    if item[0] == "PET":
-        cursor = mydb.cursor()
-        cursor.execute(f"SELECT petName, petRarity FROM auctionscanner.auctionitems WHERE itemName = 'PET' GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
-        for petInfo in cursor.fetchall():
-            cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}'")
-            priceList = []
-            for result in cursor.fetchall():
-                priceList.append(int(result[1]))
-            petTargetPrice[petInfo[0] + "-" + petInfo[1]] = selectionStrat(priceList)
-        continue
+if not os.path.exists("datacache"):
+    shouldCache = "n"
+else:
+    shouldCache = input("Use cached results database data? (y/N)")
+if shouldCache == "y":
+    print("loading data from cache")
+    f = open("datacache")
+    data = json.load(f)
+    targetPrice = data["targetPrice"]
+    petTargetPrice = data["petTargetPrice"]
+    f.close()
+else:
+    print("Processing Data from Database")
+    # first, get a list of itemNames that have more than MIN_OCCURENCES occurences in the db
     cursor = mydb.cursor()
-    cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE itemName = '{item[0]}'")
-    priceList = []
-    for result in cursor.fetchall():
-        priceList.append(int(result[1]))
-    targetPrice[item[0]] = selectionStrat(priceList)
-print(f"Finished Processing, took {time.time() - timer} seconds")
+    cursor.execute(f"SELECT itemName FROM auctionscanner.auctionitems GROUP BY itemName HAVING COUNT(*) > {MIN_OCCURENCES}")
 
-if len(ALLOWED_LIST) != 0:
-    print("Item Whitelist detected! Ignoring Item Ignorelist. Applying...")
-    newTargetPrice = {}
-    for item in ALLOWED_LIST:
-        if item in targetPrice.keys():
-            newTargetPrice[item] = targetPrice[item]
-    targetPrice = newTargetPrice
-else:
-    print("Applying Item Ignorelist")
-    # ignore items
-    for item in IGNORE_LIST:
-        if item in targetPrice.keys():
-            targetPrice.pop(item)
+    # for each item get all the sell prices and find the lower quartile
+    for item in cursor.fetchall():
+        # pet exception
+        if item[0] == "PET":
+            cursor = mydb.cursor()
+            cursor.execute(f"SELECT petName, petRarity FROM auctionscanner.auctionitems WHERE itemName = 'PET' GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
+            for petInfo in cursor.fetchall():
+                cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}'")
+                priceList = []
+                for result in cursor.fetchall():
+                    priceList.append(int(result[1]))
+                petTargetPrice[petInfo[0] + "-" + petInfo[1]] = selectionStrat(priceList)
+            continue
+        cursor = mydb.cursor()
+        cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE itemName = '{item[0]}'")
+        priceList = []
+        for result in cursor.fetchall():
+            priceList.append(int(result[1]))
+        targetPrice[item[0]] = selectionStrat(priceList)
+    print(f"Finished Processing, took {time.time() - timer} seconds")
 
-if len(ALLOWED_PET_LIST) != 0:
-    print("Pet Whitelist detected! Ignoring Pet Ignorelist. Applying...")
-    newPetTargetPrice = {}
-    for item in ALLOWED_PET_LIST:
-        if "-" in item:
-            if item in petTargetPrice.keys():
-                newPetTargetPrice[item] = petTargetPrice[item]
-        else:
-            addKeyList = []
-            for petKey in petTargetPrice.keys():
-                if item == petKey.split("-")[0]:
-                    addKeyList.append(petKey)
-            for item in addKeyList:
-                newPetTargetPrice[item] = petTargetPrice[item]
-    petTargetPrice = newPetTargetPrice
-else:
-    print("Applying Pet Ignorelist")
-    #ignore pets
-    for item in IGNORE_PET_LIST:
-        if "-" in item:
-            if item in petTargetPrice.keys():
-                petTargetPrice.pop(item)
-        else:
-            removeKeyList = []
-            for petKey in petTargetPrice.keys():
-                if item == petKey.split("-")[0]:
-                    removeKeyList.append(petKey)
-            for petKey in removeKeyList:
-                petTargetPrice.pop(petKey)
+    if len(ALLOWED_LIST) != 0:
+        print("Item Whitelist detected! Ignoring Item Ignorelist. Applying...")
+        newTargetPrice = {}
+        for item in ALLOWED_LIST:
+            if item in targetPrice.keys():
+                newTargetPrice[item] = targetPrice[item]
+        targetPrice = newTargetPrice
+    else:
+        print("Applying Item Ignorelist")
+        # ignore items
+        for item in IGNORE_LIST:
+            if item in targetPrice.keys():
+                targetPrice.pop(item)
 
-# remove items below minimum target price
-targetPriceKeys = list(targetPrice.keys())
-for key in targetPriceKeys:
-    if targetPrice[key] < MIN_TARGET_PRICE:
-        targetPrice.pop(key)
+    if len(ALLOWED_PET_LIST) != 0:
+        print("Pet Whitelist detected! Ignoring Pet Ignorelist. Applying...")
+        newPetTargetPrice = {}
+        for item in ALLOWED_PET_LIST:
+            if "-" in item:
+                if item in petTargetPrice.keys():
+                    newPetTargetPrice[item] = petTargetPrice[item]
+            else:
+                addKeyList = []
+                for petKey in petTargetPrice.keys():
+                    if item == petKey.split("-")[0]:
+                        addKeyList.append(petKey)
+                for item in addKeyList:
+                    newPetTargetPrice[item] = petTargetPrice[item]
+        petTargetPrice = newPetTargetPrice
+    else:
+        print("Applying Pet Ignorelist")
+        #ignore pets
+        for item in IGNORE_PET_LIST:
+            if "-" in item:
+                if item in petTargetPrice.keys():
+                    petTargetPrice.pop(item)
+            else:
+                removeKeyList = []
+                for petKey in petTargetPrice.keys():
+                    if item == petKey.split("-")[0]:
+                        removeKeyList.append(petKey)
+                for petKey in removeKeyList:
+                    petTargetPrice.pop(petKey)
 
-petTargetPriceKeys = list(petTargetPrice.keys())
-for key in petTargetPriceKeys:
-    if petTargetPrice[key] < MIN_TARGET_PRICE:
-        petTargetPrice.pop(key)
+    # remove items below minimum target price
+    targetPriceKeys = list(targetPrice.keys())
+    for key in targetPriceKeys:
+        if targetPrice[key] < MIN_TARGET_PRICE:
+            targetPrice.pop(key)
+
+    petTargetPriceKeys = list(petTargetPrice.keys())
+    for key in petTargetPriceKeys:
+        if petTargetPrice[key] < MIN_TARGET_PRICE:
+            petTargetPrice.pop(key)
+
+    print("Finished fetching data. Writing to cache")
+    f = open("datacache", "w")
+    f.truncate(0)
+    data = {"targetPrice": targetPrice, "petTargetPrice": petTargetPrice}
+    json.dump(data, f)
+    f.close()
 
 print(targetPrice)
 print("\n")
@@ -216,7 +241,5 @@ while True:
                 writeToIpcFile(item["uuid"], item["start"])
     print("finished scanning, waiting 60 seconds")
     nextScanTime = time.time() + 60
-
-    #TODO Write the uuid and time (in ms) to a file
 
 
