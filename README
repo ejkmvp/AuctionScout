@@ -2,6 +2,8 @@ Hypixel Skyblock
 
 Scans for BIN auctions sold significantly below their average value and attempts to purchase those items
 
+NOTE - these instructions pertain to an older version of the program. I'm currently rewriting it and will update this when the rewrite is mostly finished. The rewrite is usable but not very stable
+
 AuctionScanner.py:
 	Scans all BIN auctions, collects their sell prices and item types into a file. 
 	This should be run for at least a few days before using the rest of the program.
