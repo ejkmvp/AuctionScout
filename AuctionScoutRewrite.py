@@ -8,9 +8,7 @@ import requests
 import time
 import os
 from datetime import datetime
-
-#TODO add caching
-#TODO save the first item found in the auctions search and stop looking for items on the next search at that location
+import winsound
 
 ipcFile = "X:/Users/ethan/Desktop/Minecraft/Hypixel/ipcFile"
 def getAuctionData(pageNum):
@@ -24,7 +22,7 @@ def getAuctionData(pageNum):
             continue
         ahData = json.loads(auctionRequest.text)
         return ahData
-    return Exception("Request failed after five retries")
+    raise Exception("Request failed after five retries")
 
 # Selection Strategy. This one just takes the lower quartile
 def selectionStrat(itemList):
@@ -33,7 +31,8 @@ def selectionStrat(itemList):
 
 
 def writeToIpcFile(uuid, timestamp):
-    ipcData = uuid + "," + str(timestamp + 20000)
+    print("item will be available in", (timestamp / 1000) - time.time() + 20, "seconds")
+    ipcData = uuid + "," + str(timestamp + 19900)
     # wait for file to be empty
     while os.path.getsize(ipcFile) != 0:
         print("IPC file has data! waiting for it to clear")
@@ -41,6 +40,7 @@ def writeToIpcFile(uuid, timestamp):
     f = open(ipcFile, "w")
     f.write(ipcData)
     f.close()
+    winsound.Beep(600, 400)
 
 
 MIN_OCCURENCES = 30
@@ -51,7 +51,7 @@ IGNORE_LIST = ["ATTRIBUTE_SHARD", "FERVOR_HELMET", "FERVOR_CHESTPLATE", "FERVOR_
                "AURORA_HELMET", "AURORA_CHESTPLATE", "AURORA_LEGGINGS", "AURORA_BOOTS", "HOLLOW_HELMET", "HOLLOW_CHESTPLATE", "HOLLOW_LEGGINGS", "HOLLOW_BOOTS",
                "RAMPART_HELMET", "RAMPART_CHESTPLATE", "RAMPART_LEGGINGS", "RAMPART_BOOTS", "REKINDLED_EMBER_HELMET", "REKINDLED_EMBER_CHESTPLATE", "REKINDLED_EMBER_LEGGINGS", "REKINDLED_EMBER_BOOTS",
                "TERROR_HELMET", "TERROR_CHESTPLATE", "TERROR_LEGGINGS", "TERROR_BOOTS",
-               "MAGMA_NECKLACE", "SHOWCASE_BLOCK", "STONE_SLAB2", "GHAST_CLOAK"]
+               "MAGMA_NECKLACE", "SHOWCASE_BLOCK", "STONE_SLAB2", "GHAST_CLOAK", "JERRY_STAFF", "DIGESTED_MOSQUITO"]
 IGNORE_PET_LIST = ["JERRY"]
 
 ALLOWED_LIST = []
@@ -76,11 +76,13 @@ targetPrice = {}
 petTargetPrice = {}
 timer = time.time()
 
+# check if cache exist and decide if to use it
 if not os.path.exists("datacache"):
     shouldCache = "n"
 else:
     shouldCache = input("Use cached results database data? (y/N)")
 if shouldCache == "y":
+    # load data from file
     print("loading data from cache")
     f = open("datacache")
     data = json.load(f)
@@ -91,23 +93,23 @@ else:
     print("Processing Data from Database")
     # first, get a list of itemNames that have more than MIN_OCCURENCES occurences in the db
     cursor = mydb.cursor()
-    cursor.execute(f"SELECT itemName FROM auctionscanner.auctionitems GROUP BY itemName HAVING COUNT(*) > {MIN_OCCURENCES}")
+    cursor.execute(f"SELECT itemName FROM auctionscanner.auctionitems WHERE timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY itemName HAVING COUNT(*) > {MIN_OCCURENCES}")
 
     # for each item get all the sell prices and find the lower quartile
     for item in cursor.fetchall():
         # pet exception
         if item[0] == "PET":
             cursor = mydb.cursor()
-            cursor.execute(f"SELECT petName, petRarity FROM auctionscanner.auctionitems WHERE itemName = 'PET' GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
+            cursor.execute(f"SELECT petName, petRarity FROM auctionscanner.auctionitems WHERE itemName = 'PET' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
             for petInfo in cursor.fetchall():
-                cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}'")
+                cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
                 priceList = []
                 for result in cursor.fetchall():
                     priceList.append(int(result[1]))
                 petTargetPrice[petInfo[0] + "-" + petInfo[1]] = selectionStrat(priceList)
             continue
         cursor = mydb.cursor()
-        cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE itemName = '{item[0]}'")
+        cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE itemName = '{item[0]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
         priceList = []
         for result in cursor.fetchall():
             priceList.append(int(result[1]))
@@ -176,23 +178,20 @@ else:
     json.dump(data, f)
     f.close()
 
-print(targetPrice)
-print("\n")
-print(petTargetPrice)
 print("Begin Scan Phase")
 
-# TODO at some point, try to time up requests so that they send right when hypixel updates the endpoint
-nextScanTime = time.time() + 60 - int(datetime.utcnow().strftime('%S')) + 1
+
+scanDelay = -3.6
+nextScanTime = time.time() + 60 - int(datetime.utcnow().strftime('%S')) + scanDelay
 previousTimeStamp = "d"
 while True:
-    currentPage = 0
     if time.time() < nextScanTime:
         continue
 
-    nextScanTime += 60
+
 
     try:
-        auctionData = getAuctionData(currentPage)
+        auctionData = getAuctionData(0)
     except Exception as e:
         print("Failed to grab auction data")
         print(e)
@@ -200,11 +199,12 @@ while True:
         time.sleep(2)
         continue
 
-    #make sure we are looking at new data
-    if auctionData["lastUpdated"] == previousTimeStamp:
-        print("Data already grabbed, waiting 5 seconds")
-        time.sleep(5)
+    if nextScanTime - (auctionData['lastUpdated'] / 1000) > 20:
+        print("looking at old data, waiting 0.5 seconds")
+        time.sleep(0.5)
         continue
+
+    nextScanTime += 60
 
     for item in auctionData["auctions"]:
         # skip non bins

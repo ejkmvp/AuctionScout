@@ -34,27 +34,12 @@ mydb = mysql.connector.connect(
 # send a request every 50 ish seconds, check if the timestamp is new, and if so, add the data to the database
 nextScanTime = time.time()
 previousTimestamp = "d"
-nextCleanupTime = time.time()
 
 # main loop
 while True:
-    #check if its cleanup time
-    if time.time() >= nextCleanupTime:
-        print("running clean operation")
-        nextCleanupTime = time.time() + 43200
-        try:
-            cursor = mydb.cursor()
-            cursor.execute(f"DELETE FROM auctionscanner.auctionitems WHERE timeSold < FROM_UNIXTIME({int(time.time()) - 604800})")
-            mydb.commit()
-            print("Rows Deleted:", cursor.rowcount)
-        except Exception as e:
-            print("Error during old data delete")
-            print(e)
-
     # wait for next scan time
     if time.time() < nextScanTime:
         continue
-
 
     #attempt to grab json data from endpoint
     print("Attempting to connect to ended auctions endpoint")
