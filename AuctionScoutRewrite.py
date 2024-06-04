@@ -7,7 +7,7 @@ import base64
 import requests
 import time
 import os
-
+from datetime import datetime
 
 #TODO add caching
 #TODO save the first item found in the auctions search and stop looking for items on the next search at that location
@@ -33,7 +33,7 @@ def selectionStrat(itemList):
 
 
 def writeToIpcFile(uuid, timestamp):
-    ipcData = uuid + "," + str(timestamp)
+    ipcData = uuid + "," + str(timestamp + 20000)
     # wait for file to be empty
     while os.path.getsize(ipcFile) != 0:
         print("IPC file has data! waiting for it to clear")
@@ -50,8 +50,9 @@ MIN_TARGET_PRICE = 100000
 IGNORE_LIST = ["ATTRIBUTE_SHARD", "FERVOR_HELMET", "FERVOR_CHESTPLATE", "FERVOR_LEGGINGS", "FERVOR_BOOTS", "CRIMSON_HELMET", "CRIMSON_CHESTPLATE", "CRIMSON_LEGGINGS", "CRIMSON_BOOTS",
                "AURORA_HELMET", "AURORA_CHESTPLATE", "AURORA_LEGGINGS", "AURORA_BOOTS", "HOLLOW_HELMET", "HOLLOW_CHESTPLATE", "HOLLOW_LEGGINGS", "HOLLOW_BOOTS",
                "RAMPART_HELMET", "RAMPART_CHESTPLATE", "RAMPART_LEGGINGS", "RAMPART_BOOTS", "REKINDLED_EMBER_HELMET", "REKINDLED_EMBER_CHESTPLATE", "REKINDLED_EMBER_LEGGINGS", "REKINDLED_EMBER_BOOTS",
-               "TERROR_HELMET", "TERROR_CHESTPLATE", "TERROR_LEGGINGS", "TERROR_BOOTS"]
-IGNORE_PET_LIST = []
+               "TERROR_HELMET", "TERROR_CHESTPLATE", "TERROR_LEGGINGS", "TERROR_BOOTS",
+               "MAGMA_NECKLACE", "SHOWCASE_BLOCK", "STONE_SLAB2", "GHAST_CLOAK"]
+IGNORE_PET_LIST = ["JERRY"]
 
 ALLOWED_LIST = []
 ALLOWED_PET_LIST = []
@@ -181,12 +182,14 @@ print(petTargetPrice)
 print("Begin Scan Phase")
 
 # TODO at some point, try to time up requests so that they send right when hypixel updates the endpoint
-nextScanTime = time.time()
+nextScanTime = time.time() + 60 - int(datetime.utcnow().strftime('%S')) + 1
 previousTimeStamp = "d"
 while True:
     currentPage = 0
     if time.time() < nextScanTime:
         continue
+
+    nextScanTime += 60
 
     try:
         auctionData = getAuctionData(currentPage)

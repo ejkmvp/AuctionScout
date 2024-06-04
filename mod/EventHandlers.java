@@ -9,10 +9,12 @@ import java.util.Objects;
 import java.util.Scanner;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.inventory.GuiChest;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.multiplayer.PlayerControllerMP;
 import net.minecraft.client.network.NetHandlerPlayClient;
+import net.minecraft.network.play.client.C0DPacketCloseWindow;
 import net.minecraft.network.play.client.C0EPacketClickWindow;
 import net.minecraft.util.ChatComponentText;
 import net.minecraftforge.client.event.ClientChatReceivedEvent;
@@ -92,7 +94,7 @@ public class EventHandlers {
 	    	}
     	}
     }
-    
+    //TODO Handle case where the second window never appears for whatever reason
     @SubscribeEvent
     public void checkPurchaseWindow(final InitGuiEvent.Post event) {
     	//TEST CODE
@@ -143,11 +145,11 @@ public class EventHandlers {
     		    				
     		    				if (chest.inventorySlots.getInventory().get(31).getItem().getRegistryName().equals("minecraft:potato")) {
     		    					Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("auction already purchased"));
-    		    					Minecraft.getMinecraft().thePlayer.closeScreen();
+    		    					netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 49, 0, 0, chest.inventorySlots.inventoryItemStacks.get(31), (short)1));
     		    					isWindowTime = false;
     		    				} else if (chest.inventorySlots.getInventory().get(31).getItem().getRegistryName().equals("minecraft:poisonous_potato")){
     		    					Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("item too expensive"));
-    		    					Minecraft.getMinecraft().thePlayer.closeScreen();
+    		    					netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 49, 0, 0, chest.inventorySlots.inventoryItemStacks.get(31), (short)1));
     		    					isWindowTime = false;
     		    				} else {
     		    					netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 31, 0, 0, chest.inventorySlots.inventoryItemStacks.get(31), (short)1));
