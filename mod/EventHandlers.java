@@ -39,7 +39,7 @@ public class EventHandlers {
     public GuiContainer chest;
     public Field clientHandler;
     public NetHandlerPlayClient netHandler;
-    
+    public String itemName;
     
     @SubscribeEvent
     public void checkFile(TickEvent event) {
@@ -51,68 +51,54 @@ public class EventHandlers {
     				isWindowTime = true;
     				Minecraft.getMinecraft().thePlayer.sendChatMessage("/viewauction " + uuid);
     			}
+    		} else {
+	    		try {
+		    		// Check that the file has data and we aren't currently trying to purchase another item
+		    		if (ipcFile.length() != 0 && !isWindowTime) {
+		    			// if it does, read it
+		    			try {
+							ipcScanner = new Scanner(ipcFile);
+						} catch (FileNotFoundException e) {
+							Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Trouble reading the file, file not found"));
+							modEnabled = false;
+							return;
+						}
+		    			ipcData = ipcScanner.nextLine();
+		    			ipcScanner.close();
+		    			try {
+							ipcFlusher = new FileWriter(ipcFile, false);
+						} catch (IOException e) {
+							Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Trouble deleting the file, file not found"));
+							modEnabled = false;
+							return;
+						}
+		    			try {
+		    				ipcFlusher.flush();
+		        			ipcFlusher.close();
+		    			} catch (IOException e) {
+		    				Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Trouble clearing the file"));
+							modEnabled = false;
+							return;
+		    			}
+		    			
+		    			split = ipcData.indexOf(",");
+		    			System.out.println(split);
+		    			uuid = ipcData.substring(0, split);
+		    			nextSendTime = Long.valueOf(ipcData.substring(split + 1));
+		    			isSendTime = true;
+		    			Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Data Received"));
+		    			
+		    		}
+	    		} catch (Exception e) {
+		    		e.printStackTrace();
+		    		Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Unknown error!"));
+		    	}
     		}
-    		try {
-	    		// Check that the file has data and we aren't currently trying to purchase another item
-	    		if (ipcFile.length() != 0 && !isWindowTime) {
-	    			// if it does, read it
-	    			try {
-						ipcScanner = new Scanner(ipcFile);
-					} catch (FileNotFoundException e) {
-						Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Trouble reading the file, file not found"));
-						modEnabled = false;
-						return;
-					}
-	    			ipcData = ipcScanner.nextLine();
-	    			ipcScanner.close();
-	    			try {
-						ipcFlusher = new FileWriter(ipcFile, false);
-					} catch (IOException e) {
-						Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Trouble deleting the file, file not found"));
-						modEnabled = false;
-						return;
-					}
-	    			try {
-	    				ipcFlusher.flush();
-	        			ipcFlusher.close();
-	    			} catch (IOException e) {
-	    				Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Trouble clearing the file"));
-						modEnabled = false;
-						return;
-	    			}
-	    			
-	    			split = ipcData.indexOf(",");
-	    			System.out.println(split);
-	    			uuid = ipcData.substring(0, split);
-	    			nextSendTime = Long.valueOf(ipcData.substring(split + 1));
-	    			isSendTime = true;
-	    			
-	    		}
-    		} catch (Exception e) {
-	    		e.printStackTrace();
-	    		Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Unknown error!"));
-	    	}
     	}
     }
     //TODO Handle case where the second window never appears for whatever reason
     @SubscribeEvent
     public void checkPurchaseWindow(final InitGuiEvent.Post event) {
-    	//TEST CODE
-    	/*
-    	if (event.gui instanceof GuiChest) {
-    		Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("found window"));
-    		Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("chest size is " + String.valueOf(((GuiChest) event.gui).inventorySlots.inventorySlots.size())));
-    		//((GuiChest) event.gui).inventorySlots.slotClick(12, 0, 0, Minecraft.getMinecraft().thePlayer);
-    		//((GuiChest) event.gui).inventorySlots.transferStackInSlot(Minecraft.getMinecraft().thePlayer, 13);
-    		//Minecraft.getMinecraft().playerController.windowClick(((GuiChest) event.gui).inventorySlots.windowId, 13, 0, 2, Minecraft.getMinecraft().thePlayer);
-    		//Minecraft.getMinecraft().playerController.windowClick(Minecraft.getMinecraft().thePlayer.inventoryContainer.windowId, 13, 0, 0, Minecraft.getMinecraft().thePlayer);
-    		netHandler.addToSendQueue(new C0EPacketClickWindow(((GuiChest) event.gui).inventorySlots.windowId, 11, 0, 0, ((GuiChest) event.gui).inventorySlots.getSlot(11).getStack(), (short) 1));
-    		//netHandler.addToSendQueue(new S00PacketDisconnect());
-    		//netHandler.addToSendQueue(new S40PacketDisconnect());
-    	}
-    	
-    	*/
-    	//TEST CODE
     	if(!isWindowTime) {
     		return;
     	}
@@ -124,7 +110,6 @@ public class EventHandlers {
     				try {
     					//This is a terrible solution. In the future, it may be best to listen for incoming packets. once a guichest is opened, listen for an itemstacks packet and then do processing shit.
     					//For now, this will do. hope hypixel isnt too laggy lmao
-    					Thread.sleep(200);
     					chest = (GuiChest) event.gui;
     		    		//Do various checks to determine which window we are looking for.
     					
@@ -134,22 +119,24 @@ public class EventHandlers {
     		    			//check that the back button is present (item is an arrow)
     		    			//wait for the first slot to not be null, indicating data loaded in
     		    			Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("found big window"));
-    		    			while (Objects.isNull(chest.inventorySlots.getInventory().get(49))) {
+    		    			while (Objects.isNull(chest.inventorySlots.getInventory().get(31)) || chest.inventorySlots.getInventory().get(31).getItem().getRegistryName().equals("minecraft:feather")) {
     		    				Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("waiting"));
-    		    				Thread.sleep(50);
+    		    				Thread.sleep(20);
     		    			}
-    		    			
-    		    			if (!Objects.isNull(chest.inventorySlots.getInventory().get(49)) && chest.inventorySlots.getInventory().get(49).getItem().getRegistryName().equals("minecraft:barrier")) {
+    		    			Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText(itemName));
+    		    			if (chest.inventorySlots.getInventory().get(49).getItem().getRegistryName().equals("minecraft:barrier")) {
+    		    				
+    		    				itemName = chest.inventorySlots.getInventory().get(31).getItem().getRegistryName();
     		    				// assume we are at the correct window, check if the item is purchaseable
     		    				Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("found puchase window"));
     		    				
-    		    				if (chest.inventorySlots.getInventory().get(31).getItem().getRegistryName().equals("minecraft:potato")) {
+    		    				if (itemName.equals("minecraft:potato")) {
     		    					Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("auction already purchased"));
-    		    					netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 49, 0, 0, chest.inventorySlots.inventoryItemStacks.get(31), (short)1));
+    		    					netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 49, 0, 0, chest.inventorySlots.inventoryItemStacks.get(49), (short)1));
     		    					isWindowTime = false;
-    		    				} else if (chest.inventorySlots.getInventory().get(31).getItem().getRegistryName().equals("minecraft:poisonous_potato")){
+    		    				} else if (itemName.equals("minecraft:poisonous_potato")){
     		    					Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("item too expensive"));
-    		    					netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 49, 0, 0, chest.inventorySlots.inventoryItemStacks.get(31), (short)1));
+    		    					netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 49, 0, 0, chest.inventorySlots.inventoryItemStacks.get(49), (short)1));
     		    					isWindowTime = false;
     		    				} else {
     		    					netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 31, 0, 0, chest.inventorySlots.inventoryItemStacks.get(31), (short)1));
@@ -163,12 +150,12 @@ public class EventHandlers {
     		    			//likely the confirm box
     		    			//check that the back button is present 
     		    			
-    		    			while (Objects.isNull(chest.inventorySlots.getInventory().get(0))) {
+    		    			while (Objects.isNull(chest.inventorySlots.getInventory().get(11))) {
     		    				Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("waiting for items to load"));
-    		    				Thread.sleep(50);
+    		    				Thread.sleep(20);
     		    			}
     		    			
-    		    			if (!Objects.isNull(chest.inventorySlots.getInventory().get(11)) && chest.inventorySlots.getInventory().get(11).getItem().getRegistryName().equals("minecraft:stained_hardened_clay")) {
+    		    			if (chest.inventorySlots.getInventory().get(11).getItem().getRegistryName().equals("minecraft:stained_hardened_clay")) {
     		    				netHandler.addToSendQueue(new C0EPacketClickWindow(chest.inventorySlots.windowId, 11, 0, 0, chest.inventorySlots.inventoryItemStacks.get(11), (short)1));
     		    				isWindowTime = false;
     		    				Thread.sleep(100);
@@ -235,8 +222,11 @@ public class EventHandlers {
     		}
 
     		
-    	} else {
-    		System.out.println(event.command.getCommandName());
+    	} else if (event.command.getCommandName() == "resetState"){
+    		isSendTime = false;
+    		isWindowTime = false;
+    		modEnabled = false;
+    		Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Reset"));
     	}
     }
     
