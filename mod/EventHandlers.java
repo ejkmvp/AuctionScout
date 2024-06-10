@@ -5,23 +5,37 @@ import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import org.apache.logging.log4j.core.helpers.Integers;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.inventory.GuiChest;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.multiplayer.PlayerControllerMP;
 import net.minecraft.client.network.NetHandlerPlayClient;
-import net.minecraft.network.play.client.C0DPacketCloseWindow;
+import net.minecraft.client.network.NetworkPlayerInfo;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.play.client.C0EPacketClickWindow;
+import net.minecraft.scoreboard.Score;
+import net.minecraft.scoreboard.ScoreObjective;
+import net.minecraft.scoreboard.ScorePlayerTeam;
+import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.util.ChatComponentText;
 import net.minecraftforge.client.event.ClientChatReceivedEvent;
 import net.minecraftforge.client.event.GuiScreenEvent.InitGuiEvent;
 import net.minecraftforge.event.CommandEvent;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import scala.actors.threadpool.Arrays;
 
 public class EventHandlers {
 	
@@ -227,6 +241,74 @@ public class EventHandlers {
     		isWindowTime = false;
     		modEnabled = false;
     		Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText("Reset"));
+    		
+    		// so getObjectiveNames returns palyer names
+    		// getTeamNames returns a buynch of gib
+    		// getTeams.getMembershipCollection is also garbage 
+    		String output = "";
+    		/*
+    		Collection<Score> playerList = Minecraft.getMinecraft().thePlayer.getWorldScoreboard().getScores();
+    		
+    		playerList.forEach(new Consumer<Score>() {
+				@Override
+				public void accept(Score player) {
+					Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText(player.getScoreSc));
+				}
+			});
+    		*/
+    		
+    		//so we need to get team with name team_9 and combine the prefix and suffix
+    		Scoreboard s = Minecraft.getMinecraft().thePlayer.getWorldScoreboard();
+    		s.getTeams().forEach(new Consumer<ScorePlayerTeam>() {
+				@Override
+				public void accept(ScorePlayerTeam team) {
+					if (team.getColorPrefix().length() > 4 && team.getColorPrefix().charAt(3) == (char)9187) {
+						System.out.println(team.getColorPrefix() + team.getColorSuffix());
+					}
+				}
+			});
+    		/*
+    		Scoreboard s = Minecraft.getMinecraft().thePlayer.getWorldScoreboard();
+    		final ScoreObjective sideBarObjective = s.getObjectiveInDisplaySlot(1);
+    		List<Object> scoreList = s.getScores().stream().filter(new Predicate<Score>() {
+				@Override
+				public boolean test(Score score) {
+					return score.getObjective().getName().equals(sideBarObjective.getName());
+				}
+			}).map(new Function<Score, String>() {
+				@Override
+				public String apply(Score score) {
+					return score.getPlayerName();
+				}
+			}).collect(Collectors.toList());
+    		
+    		Collection<ScorePlayerTeam> t = s.getTeams();
+
+    		String scoreName;
+    		for(int i = 0; i < scoreList.size(); i++) {
+    			scoreName = (String) scoreList.get(i);
+    			for(ScorePlayerTeam team : t) {
+    				if (team.getMembershipCollection().contains(scoreName)) {
+    					System.out.println(team.getColorPrefix());
+    					System.out.println(team.getColorSuffix());
+    					System.out.println(team.getRegisteredName());
+    					System.out.println(team.getTeamName());
+    					int total = 0;
+    					for (String memberName : team.getMembershipCollection()) {
+    						s.getSco
+    					}
+    					
+    				}
+    			}
+    		}
+  
+    		*/
+    		
+    		
+    		
+    		
+    		
+    		//Minecraft.getMinecraft().thePlayer.addChatMessage(new ChatComponentText(Minecraft.getMinecraft().theWo));
     	}
     }
     
