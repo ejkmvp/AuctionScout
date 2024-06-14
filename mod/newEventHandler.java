@@ -27,7 +27,7 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 public class newEventHandler {
 
-	public GameStateEnum gameState;
+	public GameStateEnum gameState = GameStateEnum.DISABLED;
     public NetHandlerPlayClient netHandler;
     public File ipcFile = new File("X:\\Users\\ethan\\Desktop\\Minecraft\\Hypixel\\ipcFile");
     public Scanner ipcScanner;
