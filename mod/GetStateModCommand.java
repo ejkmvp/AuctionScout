@@ -1,15 +1,14 @@
 package com.example.examplemod;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 
-public class ToggleModCommand extends CommandBase{
+public class GetStateModCommand extends CommandBase{
 
 	@Override
 	public String getCommandName() {
-		return "toggleModEnable";
+		return "getState";
 	}
 
 	@Override

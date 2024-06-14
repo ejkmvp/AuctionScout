@@ -27,9 +27,10 @@ public class ExampleMod
     	
     	try {
 			//NetHandlerPlayClient client = (NetHandlerPlayClient) clientHandler.get(Minecraft.getMinecraft().playerController);
-			MinecraftForge.EVENT_BUS.register(new EventHandlers());
+			MinecraftForge.EVENT_BUS.register(new newEventHandler());
 			ClientCommandHandler.instance.registerCommand(new ToggleModCommand());
 			ClientCommandHandler.instance.registerCommand(new ResetModCommand());
+			ClientCommandHandler.instance.registerCommand(new GetStateModCommand());
 			
 		} catch (Exception e) {
 			System.out.println("Error");

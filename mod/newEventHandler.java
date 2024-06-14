@@ -263,6 +263,8 @@ public class newEventHandler {
 				sendLocalMessage("Going into Disable State");
 				gameState = gameState.DISABLED;
 			}
+		} else if (event.command.getCommandName() == "getState") {
+			sendLocalMessage("Current mod state is " + gameState.toString());
 		}
 	}
 	
@@ -345,7 +347,7 @@ public class newEventHandler {
 		}
 		if ("Auction House".equals(location)) {
 			return gameState.AUCTIONHOUSE;
-		} else if ("Hub".equals(location)) {
+		} else if ("Village".equals(location)) {
 			return gameState.HUB;
 		} else {
 			return gameState.ONSERVER;
@@ -414,6 +416,7 @@ public class newEventHandler {
 	}
 	
 	private void printGameState() {
-		Minecraft.getMinecraft().currentScreen.drawCenteredString(Minecraft.getMinecraft().fontRendererObj, gameState.toString(), 0, 0, 0);
+		//TODO find some way to display game state
+		return;
 	}
 }
