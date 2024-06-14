@@ -184,12 +184,15 @@ print("Begin Scan Phase")
 scanDelay = -3.6
 nextScanTime = time.time() + 60 - int(datetime.utcnow().strftime('%S')) + scanDelay
 previousTimeStamp = "d"
+retryCount = 0
 while True:
+    if retryCount >= 5:
+        print("failed after 5+ retries, waiting till next cycle")
+        nextScanTime += 60
+        retryCount = 0
+        continue
     if time.time() < nextScanTime:
         continue
-
-
-
     try:
         auctionData = getAuctionData(0)
     except Exception as e:
@@ -197,52 +200,72 @@ while True:
         print(e)
         print("Trying again in 2 seconds")
         time.sleep(2)
+        retryCount += 1
         continue
 
     if nextScanTime - (auctionData['lastUpdated'] / 1000) > 20:
         print("looking at old data, waiting 0.5 seconds")
         time.sleep(0.5)
+        retryCount += 1
         continue
 
+    retryCount = 0
     nextScanTime += 60
 
-    for item in auctionData["auctions"]:
-        # skip non bins
-        if not item["bin"]:
-            continue
-
-        # skip already
-        if item["highest_bid_amount"] != 0:
-            continue
-
-        attribData = nbt.NBTFile(buffer=io.BytesIO(gzip.decompress(base64.b64decode(item["item_bytes"]))))["i"][0]
-        itemName = str(attribData["tag"]["ExtraAttributes"]["id"])
-        itemPrice = item["starting_bid"]
-
-        # check if item is a pet
-        if itemName == "PET":
-            petInfo = json.loads(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
-            petName = petInfo["type"]
-            petRarity = petInfo["tier"]
-            fullPetName = petName + "-" + petRarity
-            if fullPetName not in petTargetPrice.keys():
+    # Now that we verified we are looking at new data, scan pages until we find one with a start time outside of the last minute
+    continueScanning = True
+    pageNum = 0
+    itemCandidates = []
+    while continueScanning:
+        if pageNum != 0:
+            try:
+                auctionData = getAuctionData(pageNum)
+            except Exception as e:
+                print("Failed to grab auction data")
+                print(e)
+                print("Trying again in 2 seconds")
+                time.sleep(2)
+                retryCount += 1
                 continue
-            if itemPrice < 0.25 * petTargetPrice[fullPetName]:
-                print("Attempt purchase of item with auctionID:")
-                print(item["uuid"])
-                print(item)
-                print(fullPetName)
-                writeToIpcFile(item["uuid"], item["start"])
+        pageNum += 1
+        earliestStart = time.time() * 1000
+        for item in auctionData["auctions"]:
+            # skip non bins
+            if not item["bin"]:
+                continue
+
+            # skip already purchased
+            if item["highest_bid_amount"] != 0:
+                continue
+
+            earliestStart = min(earliestStart, item["start"])
+
+            attribData = nbt.NBTFile(buffer=io.BytesIO(gzip.decompress(base64.b64decode(item["item_bytes"]))))["i"][0]
+            itemName = str(attribData["tag"]["ExtraAttributes"]["id"])
+            itemPrice = item["starting_bid"]
+
+            # check if item is a pet
+            if itemName == "PET":
+                petInfo = json.loads(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
+                petName = petInfo["type"]
+                petRarity = petInfo["tier"]
+                fullPetName = petName + "-" + petRarity
+                if fullPetName not in petTargetPrice.keys():
+                    continue
+                if itemPrice < 0.25 * petTargetPrice[fullPetName]:
+                    itemCandidates.append([item["uuid"], item["start"]])
+            else:
+                if itemName not in targetPrice.keys():
+                    continue
+                if itemPrice < 0.25 * targetPrice[itemName]:
+                    itemCandidates.append([item["uuid"], item["start"]])
+        if earliestStart > auctionData["lastUpdated"] - 60:
+            print("Scanning another page")
         else:
-            if itemName not in targetPrice.keys():
-                continue
-            if itemPrice < 0.25 * targetPrice[itemName]:
-                print("Attempt purchase of item with auctionID:")
-                print(item["uuid"])
-                print(item)
-                print(itemName)
-                writeToIpcFile(item["uuid"], item["start"])
-    print("finished scanning, waiting 60 seconds")
-    nextScanTime = time.time() + 60
+            continueScanning = False
+    print("found", len(itemCandidates),"candidates")
+    itemCandidates.sort(key=lambda item: item[1], reverse=True)
+    for item in itemCandidates:
+        writeToIpcFile(item[0], item[1])
 
 
