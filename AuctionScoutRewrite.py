@@ -74,7 +74,6 @@ mydb = mysql.connector.connect(
 
 targetPrice = {}
 petTargetPrice = {}
-timer = time.time()
 
 # check if cache exist and decide if to use it
 if not os.path.exists("datacache"):
@@ -90,31 +89,71 @@ if shouldCache == "y":
     petTargetPrice = data["petTargetPrice"]
     f.close()
 else:
+    progressInterval = time.time()
+    startTime = time.time()
     print("Processing Data from Database")
     # first, get a list of itemNames that have more than MIN_OCCURENCES occurences in the db
     cursor = mydb.cursor()
     cursor.execute(f"SELECT itemName FROM auctionscanner.auctionitems WHERE timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY itemName HAVING COUNT(*) > {MIN_OCCURENCES}")
 
+    allItems = cursor.fetchall()
+    totalCount = len(allItems)
+    elapsed = 0
+
+    petFound = False
+
     # for each item get all the sell prices and find the lower quartile
-    for item in cursor.fetchall():
+    for x in range(totalCount):
+        item = allItems[x]
+        # check update interval
+        if time.time() > progressInterval:
+            progressInterval += 10
+            elapsed = time.time() - startTime
+            print(f'\nfinished processing {x} items')
+            print(f'{elapsed} seconds elapsed')
+            if x != 0:
+                print(f'estimated {int((totalCount * elapsed / x) - elapsed)} seconds remaining')
+
         # pet exception
         if item[0] == "PET":
-            cursor = mydb.cursor()
-            cursor.execute(f"SELECT petName, petRarity FROM auctionscanner.auctionitems WHERE itemName = 'PET' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
-            for petInfo in cursor.fetchall():
-                cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
-                priceList = []
-                for result in cursor.fetchall():
-                    priceList.append(int(result[1]))
-                petTargetPrice[petInfo[0] + "-" + petInfo[1]] = selectionStrat(priceList)
+            petFound = True
             continue
+
         cursor = mydb.cursor()
         cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE itemName = '{item[0]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
         priceList = []
         for result in cursor.fetchall():
             priceList.append(int(result[1]))
         targetPrice[item[0]] = selectionStrat(priceList)
-    print(f"Finished Processing, took {time.time() - timer} seconds")
+    print(f"Finished Processing Items, took {time.time() - startTime} seconds")
+
+    if petFound:
+        print("Processing Pets")
+        petStartTime = time.time()
+        progressInterval = time.time()
+        elapsed = 0
+        cursor = mydb.cursor()
+        cursor.execute(f"SELECT petName, petRarity FROM auctionscanner.auctionitems WHERE itemName = 'PET' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
+        allPets = cursor.fetchall()
+        totalPetCount = len(allPets)
+        for x in range(totalPetCount):
+            petInfo = allPets[x]
+
+            if time.time() > progressInterval:
+                progressInterval += 10
+                elapsed = time.time() - petStartTime
+                print(f'\nfinished processing {x} pets')
+                print(f'{elapsed} seconds elapsed')
+                if x != 0:
+                    print(f'estimated {int((totalPetCount * elapsed / x) - elapsed)} seconds remaining')
+
+            cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
+            priceList = []
+            for result in cursor.fetchall():
+                priceList.append(int(result[1]))
+            petTargetPrice[petInfo[0] + "-" + petInfo[1]] = selectionStrat(priceList)
+        print(f"Finished Processing Pets, took {time.time() - petStartTime} seconds")
+    print(f'Total process took {time.time() - startTime} seconds')
 
     if len(ALLOWED_LIST) != 0:
         print("Item Whitelist detected! Ignoring Item Ignorelist. Applying...")
