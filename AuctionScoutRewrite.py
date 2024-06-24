@@ -1,4 +1,5 @@
 import mysql.connector
+import psycopg2
 import json
 from nbt import nbt
 import io
@@ -31,8 +32,8 @@ def selectionStrat(itemList):
 
 
 def writeToIpcFile(uuid, timestamp):
-    print("item will be available in", (timestamp / 1000) - time.time() + 20, "seconds")
-    ipcData = uuid + "," + str(timestamp + 19900)
+    print("item will be available in", (timestamp / 1000) - time.time() + 17, "seconds")
+    ipcData = uuid + "," + str(timestamp + 17000)
     # wait for file to be empty
     while os.path.getsize(ipcFile) != 0:
         print("IPC file has data! waiting for it to clear")
@@ -51,7 +52,7 @@ IGNORE_LIST = ["ATTRIBUTE_SHARD", "FERVOR_HELMET", "FERVOR_CHESTPLATE", "FERVOR_
                "AURORA_HELMET", "AURORA_CHESTPLATE", "AURORA_LEGGINGS", "AURORA_BOOTS", "HOLLOW_HELMET", "HOLLOW_CHESTPLATE", "HOLLOW_LEGGINGS", "HOLLOW_BOOTS",
                "RAMPART_HELMET", "RAMPART_CHESTPLATE", "RAMPART_LEGGINGS", "RAMPART_BOOTS", "REKINDLED_EMBER_HELMET", "REKINDLED_EMBER_CHESTPLATE", "REKINDLED_EMBER_LEGGINGS", "REKINDLED_EMBER_BOOTS",
                "TERROR_HELMET", "TERROR_CHESTPLATE", "TERROR_LEGGINGS", "TERROR_BOOTS",
-               "MAGMA_NECKLACE", "SHOWCASE_BLOCK", "STONE_SLAB2", "GHAST_CLOAK", "JERRY_STAFF", "DIGESTED_MOSQUITO", "NEW_YEAR_CAKE"]
+               "MAGMA_NECKLACE", "SHOWCASE_BLOCK", "STONE_SLAB2", "GHAST_CLOAK", "JERRY_STAFF", "DIGESTED_MOSQUITO", "NEW_YEAR_CAKE", "RUNE"]
 IGNORE_PET_LIST = ["JERRY"]
 
 ALLOWED_LIST = []
@@ -65,11 +66,20 @@ ALLOWED_PET_LIST = []
     #4. when an item is found, somehow send a signal to the fabric/forge/liquidbounce mod that includes the auction ID and when it becomes available
 
 # attempt connection to database
+""" mysql
 mydb = mysql.connector.connect(
     host="localhost",
     user="auctionscanner",
     password="auctionpassword",
     database="auctionscanner"
+)
+"""
+mydb = psycopg2.connect(
+    host="192.168.1.46",
+    dbname="auctionscanner",
+    user="auctionscanner",
+    password="auctionpassword",
+    port="5555"
 )
 
 targetPrice = {}
@@ -94,10 +104,12 @@ else:
     print("Processing Data from Database")
     # first, get a list of itemNames that have more than MIN_OCCURENCES occurences in the db
     cursor = mydb.cursor()
-    cursor.execute(f"SELECT itemName FROM auctionscanner.auctionitems WHERE timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY itemName HAVING COUNT(*) > {MIN_OCCURENCES}")
+    # mysql cursor.execute(f"SELECT itemName FROM auctionscanner.auctionitems WHERE timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY itemName HAVING COUNT(*) > {MIN_OCCURENCES}")
+    cursor.execute(f"SELECT itemName FROM auctionitems WHERE timesold > TO_TIMESTAMP({int(time.time()) - 604800}) GROUP BY itemName HAVING COUNT(*) > {MIN_OCCURENCES}")
 
     allItems = cursor.fetchall()
     totalCount = len(allItems)
+    print(f"detected {totalCount} items")
     elapsed = 0
 
     petFound = False
@@ -116,16 +128,19 @@ else:
 
         # pet exception
         if item[0] == "PET":
+            print(f"at least one pet found, will process pets after normal items")
             petFound = True
             continue
 
         cursor = mydb.cursor()
-        cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE itemName = '{item[0]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
+        # mysql cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE itemName = '{item[0]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
+        cursor.execute(f"SELECT auctionId, sellPrice FROM auctionitems WHERE itemName = '{item[0]}' AND timesold > TO_TIMESTAMP({int(time.time()) - 604800})")
         priceList = []
         for result in cursor.fetchall():
             priceList.append(int(result[1]))
+        print(f"found {len(priceList)} items for {item[0]}")
         targetPrice[item[0]] = selectionStrat(priceList)
-    print(f"Finished Processing Items, took {time.time() - startTime} seconds")
+    print(f"Finished Processing {totalCount} Items, took {time.time() - startTime} seconds")
 
     if petFound:
         print("Processing Pets")
@@ -133,7 +148,8 @@ else:
         progressInterval = time.time()
         elapsed = 0
         cursor = mydb.cursor()
-        cursor.execute(f"SELECT petName, petRarity FROM auctionscanner.auctionitems WHERE itemName = 'PET' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
+        # mysql cursor.execute(f"SELECT petName, petRarity FROM auctionscanner.auctionitems WHERE itemName = 'PET' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800}) GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
+        cursor.execute(f"SELECT petName, petRarity FROM auctionitems WHERE itemName = 'PET' AND timesold > TO_TIMESTAMP({int(time.time()) - 604800}) GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
         allPets = cursor.fetchall()
         totalPetCount = len(allPets)
         for x in range(totalPetCount):
@@ -146,8 +162,8 @@ else:
                 print(f'{elapsed} seconds elapsed')
                 if x != 0:
                     print(f'estimated {int((totalPetCount * elapsed / x) - elapsed)} seconds remaining')
-
-            cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
+            # mysql cursor.execute(f"SELECT auctionId, sellPrice FROM auctionscanner.auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}' AND timeSold > FROM_UNIXTIME({int(time.time()) - 604800})")
+            cursor.execute(f"SELECT auctionId, sellPrice FROM auctionitems WHERE petName = '{petInfo[0]}' AND petRarity = '{petInfo[1]}' AND timesold > TO_TIMESTAMP({int(time.time()) - 604800})")
             priceList = []
             for result in cursor.fetchall():
                 priceList.append(int(result[1]))
@@ -298,7 +314,7 @@ while True:
                     continue
                 if itemPrice < 0.25 * targetPrice[itemName]:
                     itemCandidates.append([item["uuid"], item["start"]])
-        if earliestStart > auctionData["lastUpdated"] - 60:
+        if earliestStart > auctionData["lastUpdated"] - 59000:
             print("Scanning another page")
         else:
             continueScanning = False

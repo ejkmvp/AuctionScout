@@ -1,4 +1,5 @@
 import mysql.connector
+import psycopg2
 import json
 from nbt import nbt
 import io
@@ -24,11 +25,20 @@ def getEndedAuctionData():
 
 
 # attempt connection to database
+""" mysql
 mydb = mysql.connector.connect(
     host="localhost",
     user="auctionscanner",
     password="auctionpassword",
     database="auctionscanner"
+)
+"""
+mydb = psycopg2.connect(
+    host="192.168.1.46",
+    dbname="auctionscanner",
+    user="auctionscanner",
+    password="auctionpassword",
+    port="5555"
 )
 
 # send a request every 50 ish seconds, check if the timestamp is new, and if so, add the data to the database
@@ -130,10 +140,12 @@ while True:
         try:
             if itemName == "PET":
                 # pet insertion
-                cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName, petName, petRarity) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}', '{petName}', '{petRarity}')")
+                # mysql cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName, petName, petRarity) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}', '{petName}', '{petRarity}')")
+                cursor.execute(f"INSERT INTO auctionitems (auctionId, sellPrice, timesold, itemName, petName, petRarity) VALUES ('{auctionId}', {int(sellPrice)},  TO_TIMESTAMP({timeSold}), '{itemName}', '{petName}', '{petRarity}')")
             else:
                 # normal insertion
-                cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}')")
+                # mysql cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}')")
+                cursor.execute(f"INSERT INTO auctionitems (auctionId, sellPrice, timesold, itemName) VALUES ('{auctionId}', {int(sellPrice)},  TO_TIMESTAMP({timeSold}), '{itemName}')")
             mydb.commit()
         except Exception as e:
             print("error during database insertion")
