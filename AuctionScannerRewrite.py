@@ -151,6 +151,7 @@ while True:
             print("error during database insertion")
             print(e)
             print("skipping iteration")
+            break
     print("Finished scanning items")
     print("Next scan is in", nextScanTime - time.time(), "seconds.")
 

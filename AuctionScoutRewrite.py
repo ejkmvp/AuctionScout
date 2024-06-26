@@ -52,7 +52,7 @@ IGNORE_LIST = ["ATTRIBUTE_SHARD", "FERVOR_HELMET", "FERVOR_CHESTPLATE", "FERVOR_
                "AURORA_HELMET", "AURORA_CHESTPLATE", "AURORA_LEGGINGS", "AURORA_BOOTS", "HOLLOW_HELMET", "HOLLOW_CHESTPLATE", "HOLLOW_LEGGINGS", "HOLLOW_BOOTS",
                "RAMPART_HELMET", "RAMPART_CHESTPLATE", "RAMPART_LEGGINGS", "RAMPART_BOOTS", "REKINDLED_EMBER_HELMET", "REKINDLED_EMBER_CHESTPLATE", "REKINDLED_EMBER_LEGGINGS", "REKINDLED_EMBER_BOOTS",
                "TERROR_HELMET", "TERROR_CHESTPLATE", "TERROR_LEGGINGS", "TERROR_BOOTS",
-               "MAGMA_NECKLACE", "SHOWCASE_BLOCK", "STONE_SLAB2", "GHAST_CLOAK", "JERRY_STAFF", "DIGESTED_MOSQUITO", "NEW_YEAR_CAKE", "RUNE"]
+               "MAGMA_NECKLACE", "SHOWCASE_BLOCK", "STONE_SLAB2", "GHAST_CLOAK", "JERRY_STAFF", "DIGESTED_MOSQUITO", "NEW_YEAR_CAKE", "RUNE", "GLOWSTONE_GAUNTLET"]
 IGNORE_PET_LIST = ["JERRY"]
 
 ALLOWED_LIST = []
@@ -138,7 +138,6 @@ else:
         priceList = []
         for result in cursor.fetchall():
             priceList.append(int(result[1]))
-        print(f"found {len(priceList)} items for {item[0]}")
         targetPrice[item[0]] = selectionStrat(priceList)
     print(f"Finished Processing {totalCount} Items, took {time.time() - startTime} seconds")
 
@@ -152,6 +151,7 @@ else:
         cursor.execute(f"SELECT petName, petRarity FROM auctionitems WHERE itemName = 'PET' AND timesold > TO_TIMESTAMP({int(time.time()) - 604800}) GROUP BY petName, petRarity HAVING COUNT(*) > {MIN_PET_OCCURENCES}")
         allPets = cursor.fetchall()
         totalPetCount = len(allPets)
+        print(f"Found {totalPetCount} pets-rarity combinations")
         for x in range(totalPetCount):
             petInfo = allPets[x]
 
