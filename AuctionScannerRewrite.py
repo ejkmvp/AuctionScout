@@ -7,6 +7,11 @@ import gzip
 import base64
 import requests
 import time
+import logging
+
+logger = logging.getLogger("AuctionScanner")
+logFormat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(filename=str(int(time.time()))+"-AuctionScanner.log", level=logging.INFO, format=logFormat)
 
 #TODO account for starred items (i dont exactly remember what makes an item starred)
 
@@ -151,6 +156,8 @@ while True:
             print("error during database insertion")
             print(e)
             print("skipping iteration")
+            logger.error(f'Insertion failed on item {itemName} with auction id {auctionId} with error {str(e)}')
+            mydb.rollback()
             break
     print("Finished scanning items")
     print("Next scan is in", nextScanTime - time.time(), "seconds.")
