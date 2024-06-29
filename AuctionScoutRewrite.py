@@ -28,7 +28,7 @@ def getAuctionData(pageNum):
 # Selection Strategy. This one just takes the lower quartile
 def selectionStrat(itemList):
     itemList.sort()
-    return itemList[int(len(itemList)/4)]
+    return 0.25 * itemList[int(len(itemList)/4)]
 
 
 def writeToIpcFile(uuid, timestamp):
@@ -323,12 +323,12 @@ while True:
                 fullPetName = petName + "-" + petRarity
                 if fullPetName not in petTargetPrice.keys():
                     continue
-                if itemPrice < 0.25 * petTargetPrice[fullPetName]:
+                if itemPrice < petTargetPrice[fullPetName]:
                     itemCandidates.append([item["uuid"], item["start"]])
             else:
                 if itemName not in targetPrice.keys():
                     continue
-                if itemPrice < 0.25 * targetPrice[itemName]:
+                if itemPrice < targetPrice[itemName]:
                     itemCandidates.append([item["uuid"], item["start"]])
         if earliestStart > auctionData["lastUpdated"] - 59000:
             print("Scanning another page")
