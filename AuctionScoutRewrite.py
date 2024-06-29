@@ -233,8 +233,24 @@ else:
     json.dump(data, f)
     f.close()
 
-print("Begin Scan Phase")
-
+if os.path.exists("overrides.json"):
+    print("Overrides detected, applying")
+    f = open("overrides.json")
+    try:
+        overridesJson = json.load(f)
+        print(f"{len(overridesJson.keys())} overrides found")
+        for overrideKey in overridesJson.keys():
+            if overrideKey in targetPrice.keys():
+                targetPrice[overrideKey] = max(targetPrice[overrideKey], overridesJson[overrideKey])
+            else:
+                targetPrice[overrideKey] = overridesJson[overrideKey]
+    except Exception as e:
+        print("Failed to open overrides json")
+        print(e)
+        print("Skipping...")
+else:
+    print("No overrides.json detected")
+print("Beginning scanning")
 
 scanDelay = -3.6
 nextScanTime = time.time() + 60 - int(datetime.utcnow().strftime('%S')) + scanDelay
@@ -323,5 +339,3 @@ while True:
     for item in itemCandidates:
         writeToIpcFile(item[0], item[1])
     print(f"Scanning again in {nextScanTime - time.time()} seconds")
-
-
