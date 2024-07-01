@@ -35,8 +35,11 @@ def writeToIpcFile(uuid, timestamp):
     print("item will be available in", (timestamp / 1000) - time.time() + 17, "seconds")
     ipcData = uuid + "," + str(timestamp + 17000)
     # wait for file to be empty
+    sendIpcDataMessage = True
     while os.path.getsize(ipcFile) != 0:
-        print("IPC file has data! waiting for it to clear")
+        if sendIpcDataMessage:
+            sendIpcDataMessage = False
+            print("IPC file has data! waiting for it to clear")
     print("IPC file is empty, adding data")
     f = open(ipcFile, "w")
     f.write(ipcData)
@@ -119,7 +122,7 @@ else:
         item = allItems[x]
         # check update interval
         if time.time() > progressInterval:
-            progressInterval += 10
+            progressInterval += 3
             elapsed = time.time() - startTime
             print(f'\nfinished processing {x} items')
             print(f'{elapsed} seconds elapsed')
@@ -156,7 +159,7 @@ else:
             petInfo = allPets[x]
 
             if time.time() > progressInterval:
-                progressInterval += 10
+                progressInterval += 3
                 elapsed = time.time() - petStartTime
                 print(f'\nfinished processing {x} pets')
                 print(f'{elapsed} seconds elapsed')
@@ -250,6 +253,13 @@ if os.path.exists("overrides.json"):
         print("Skipping...")
 else:
     print("No overrides.json detected")
+
+shouldBackSearch = input("Perform an initial long search? (6 hours or 50 pages, whatever comes first) (y\\N)")
+if shouldBackSearch == "y":
+    print("Will perform back search")
+    minTime = 6 * 3600 * 1000
+else:
+    minTime = 59000
 print("Beginning scanning")
 
 scanDelay = -3.6
@@ -279,16 +289,16 @@ while True:
         time.sleep(0.5)
         retryCount += 1
         continue
-
+    print("Scanning Page")
     retryCount = 0
     nextScanTime += 60
 
     # Now that we verified we are looking at new data, scan pages until we find one with a start time outside of the last minute
     continueScanning = True
-    pageNum = 0
+    pageNum = 1
     itemCandidates = []
     while continueScanning:
-        if pageNum != 0:
+        if pageNum != 1:
             try:
                 auctionData = getAuctionData(pageNum)
             except Exception as e:
@@ -315,6 +325,10 @@ while True:
             itemName = str(attribData["tag"]["ExtraAttributes"]["id"])
             itemPrice = item["starting_bid"]
 
+            # skip if has attributes
+            if "attributes" in attribData["tag"]["ExtraAttributes"].keys():
+                continue
+
             # check if item is a pet
             if itemName == "PET":
                 petInfo = json.loads(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
@@ -330,11 +344,16 @@ while True:
                     continue
                 if itemPrice < targetPrice[itemName]:
                     itemCandidates.append([item["uuid"], item["start"]])
-        if earliestStart > auctionData["lastUpdated"] - 59000:
-            print("Scanning another page")
+        print(earliestStart)
+        print(auctionData["lastUpdated"])
+        print(minTime)
+        print(earliestStart > auctionData["lastUpdated"] - minTime)
+        if earliestStart > auctionData["lastUpdated"] - minTime and pageNum < 100:
+            print(f"Scanning page {pageNum}")
         else:
             continueScanning = False
     print("found", len(itemCandidates),"candidates")
+    minTime = 59000
     itemCandidates.sort(key=lambda item: item[1], reverse=True)
     for item in itemCandidates:
         writeToIpcFile(item[0], item[1])
