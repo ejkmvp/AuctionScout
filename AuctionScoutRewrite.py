@@ -344,10 +344,6 @@ while True:
                     continue
                 if itemPrice < targetPrice[itemName]:
                     itemCandidates.append([item["uuid"], item["start"]])
-        print(earliestStart)
-        print(auctionData["lastUpdated"])
-        print(minTime)
-        print(earliestStart > auctionData["lastUpdated"] - minTime)
         if earliestStart > auctionData["lastUpdated"] - minTime and pageNum < 100:
             print(f"Scanning page {pageNum}")
         else:
