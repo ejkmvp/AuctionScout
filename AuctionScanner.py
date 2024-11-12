@@ -1,116 +1,171 @@
-#TODO Incorporate rarity for all items to account for reforges
-import requests
-import time
+import mysql.connector
+import psycopg2
 import json
-import gzip
 from nbt import nbt
 import io
+import gzip
 import base64
-#Dict struct will be key = id (except for pets, where it will be petInfo["type"]+_+petInfo["tier"], with data being [total, numSold, avg]
-#we have some icky eval shit going on when handling whatever fucking wack format hypixel uses, some
-false = False #bruh
-true = True #bruh2
-name = ""
-file = open("ahData.json", "r")
-ahStored = json.load(file)
-file.close()
-currentIDs = []
-newIDs = []
-#ahStored
-def runScan():
-	count = 0
-	global currentIDs
-	global newIDs
-	keyList = ahStored.keys()
-	while count < 6:
-		request = requests.get("https://api.hypixel.net/skyblock/auctions_ended")
-		if request.status_code == 200:
-			break
-		else:
-			print(request.status_code)
-			#print(request.text)
-		count += 1
-		time.sleep(0.5)
-	if count > 5:
-		print("somehow failed after multiple attempts, gonna wait 5 mins before try again")
-		time.sleep(300)
-	ahData = json.loads(request.text)
-	for item in ahData["auctions"]:
-		#check for bin
-		if(item["bin"] == False):
-			continue
-		id = item["auction_id"]
-		if id in currentIDs:
-			#print('duplicate')
-			newIDs.append(id)
-			continue
-		attribData = nbt.NBTFile(buffer=io.BytesIO(gzip.decompress(base64.b64decode(item["item_bytes"]))))["i"][0]
-		itemName = str(attribData["tag"]["ExtraAttributes"]["id"])
-		"""CONDITIONS*********************************************************************************"""
-		if str(attribData["Count"]) != "1":
-			continue
-		if itemName == "PET":
-			#print("pet detected")
-			#print(item["auction_id"])
-			if int(str(attribData["tag"]["display"]["Name"]).split("Lvl ")[1].split("]")[0]) > 10:
-				continue
-			petInfo = eval(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
-			name = str(petInfo["type"]+"_"+petInfo["tier"])
-			#+"_"+attribData["tag"]["display"]["Name"].split("Lvl ")[1].split("]")[0])
-		elif itemName == "ENCHANTED_BOOK":
-			#print("book detected")
-			enchantList = attribData["tag"]["ExtraAttributes"]["enchantments"]
-			if len(enchantList) > 1:
-				continue
-			firstEnchant = str(enchantList.keys()[0])
-			name = str("ENCHANTED_BOOK_" + firstEnchant + "_" + str(enchantList[firstEnchant]))
-		elif 'enchantments' in attribData["tag"]["ExtraAttributes"].keys():
-			#print('enchantments detected')
-			continue
-		elif 'dungeon_item_level' in attribData["tag"]["ExtraAttributes"].keys():
-			#print('dungeon level detected')
-			continue
-		elif 'hot_potato_count' in attribData["tag"]["ExtraAttributes"].keys():
-			#print('hot potato')
-			continue
-		elif 'rarity_upgrades' in attribData["tag"]["ExtraAttributes"].keys():
-			#print('hot potato')
-			continue
-		else:
-			name = str(itemName)
-		#Append item and id to our lists
-		if name in keyList:
-			total = ahStored[name][0] + int(item["price"])
-			numSold = ahStored[name][1] + 1
-			ahStored[name] = [total, numSold, round(total/numSold), ahStored[name][3]]
-			ahStored[name][3].append(int(item["price"]))
-			if len(ahStored[name][3]) > 150:
-				ahStored[name][3].pop(0)
-			
-		else:
-			ahStored[name] = [int(item["price"]), 1, int(item["price"]), [int(item["price"])]]
-		newIDs.append(id)
-	currentIDs = newIDs
-	newIDs = []
+import requests
+import time
+import logging
 
+logger = logging.getLogger("AuctionScanner")
+logFormat = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(filename=str(int(time.time()))+"-AuctionScanner.log", level=logging.INFO, format=logFormat)
+
+#TODO account for starred items (i dont exactly remember what makes an item starred)
+
+def getEndedAuctionData():
+    retryCount = 5
+    while retryCount != 0:
+        auctionRequest = requests.get("https://api.hypixel.net/v2/skyblock/auctions_ended")
+        if auctionRequest.status_code != 200:
+            print("Error with request: ", auctionRequest.status_code)
+            retryCount -= 1
+            time.sleep(1)
+            continue
+        ahData = json.loads(auctionRequest.text)
+        return ahData
+    return Exception("Request failed after five retries")
+
+
+# attempt connection to database
+""" mysql
+mydb = mysql.connector.connect(
+    host="localhost",
+    user="auctionscanner",
+    password="auctionpassword",
+    database="auctionscanner"
+)
+"""
+mydb = psycopg2.connect(
+    host="192.168.1.46",
+    dbname="auctionscanner",
+    user="auctionscanner",
+    password="auctionpassword",
+    port="5555"
+)
+
+# send a request every 50 ish seconds, check if the timestamp is new, and if so, add the data to the database
+nextScanTime = time.time()
+previousTimestamp = "d"
+
+# main loop
 while True:
-	startTime = time.time() + 60
-	print("starting scan")
-	runScan()
-	print("finished scan")
-	#print(ahStored)
-	file = open("ahData.json", "w")
-	file.seek(0)
-	file.truncate()
-	json.dump(ahStored, file)
-	file.close()
-	while startTime > time.time():
-		pass
+    # wait for next scan time
+    if time.time() < nextScanTime:
+        continue
+
+    #attempt to grab json data from endpoint
+    print("Attempting to connect to ended auctions endpoint")
+    try:
+        auctionData = getEndedAuctionData()
+    except Exception as e:
+        print("Failed to get auction data")
+        print(e)
+        print("Will try again in 6 seconds")
+        time.sleep(6)
+        continue
+
+    # check if necessary tags are present
+    if "success" not in auctionData.keys() or "lastUpdated" not in auctionData.keys() or "auctions" not in auctionData.keys():
+        print("auction data invalid, trying again in 6 seconds")
+        time.sleep(6)
+        continue
+
+    # check that the success tag is true
+    if auctionData["success"] != True:
+        print("Auction data indicated an error, retrying in 6 seconds")
+        time.sleep(6)
+        continue
+
+    # check that the timestamp is newer than the previous request
+    currentTimestamp = auctionData["lastUpdated"]
+    if currentTimestamp == previousTimestamp:
+        print("Timestamps are equal, waiting 10 seconds")
+        time.sleep(10)
+        continue
+    previousTimestamp = currentTimestamp
+
+    # set next time interval (50 seconds from current time)
+    nextScanTime = time.time() + 50
+
+    # process each item
+    for item in auctionData["auctions"]:
+        # make sure it's a BIN offer
+        if not item["bin"]:
+            continue
+        auctionId = item["auction_id"]
+        sellPrice = item["price"]
+        timeSold = int(item["timestamp"]) / 1000  # convert to seconds
+        attribData = nbt.NBTFile(buffer=io.BytesIO(gzip.decompress(base64.b64decode(item["item_bytes"]))))["i"][0]
+        itemName = str(attribData["tag"]["ExtraAttributes"]["id"])
+
+        # ------------------------------ Item Exclusions -------------------------------------- #
+
+        # exclude items sold with a count greater than 1
+        if str(attribData["Count"]) != "1":
+            continue
+
+        # handle pets
+        if itemName == "PET":
+            # exclude if pet level is greater than 10
+            if int(str(attribData["tag"]["display"]["Name"]).split("Lvl ")[1].split("]")[0]) > 10:
+                continue
+            #print(attribData["tag"]["ExtraAttributes"]["petInfo"])
+            petInfo = json.loads(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
+            #petInfo = eval(str(attribData["tag"]["ExtraAttributes"]["petInfo"]))
+            # extract pet name and rarity
+            petName = petInfo["type"]
+            petRarity = petInfo["tier"]
+
+        # exclude other items that have enchantments
+        elif 'enchantments' in attribData["tag"]["ExtraAttributes"].keys():
+            continue
+
+        #exclude dungeonized items
+        elif 'dungeon_item_level' in attribData["tag"]["ExtraAttributes"].keys():
+            # print('dungeon level detected')
+            continue
+
+        #exclude items with hot potatos on them
+        elif 'hot_potato_count' in attribData["tag"]["ExtraAttributes"].keys():
+            # print('hot potato')
+            continue
+
+        #exclude items that have recombobulated
+        elif 'rarity_upgrades' in attribData["tag"]["ExtraAttributes"].keys():
+            # print('hot potato')
+            continue
+
+        # ------------------------------------------------------------------------ #
+
+        # run insertion into database
+        cursor = mydb.cursor()
+        try:
+            if itemName == "PET":
+                # pet insertion
+                # mysql cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName, petName, petRarity) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}', '{petName}', '{petRarity}')")
+                cursor.execute(f"INSERT INTO auctionitems (auctionId, sellPrice, timesold, itemName, petName, petRarity) VALUES ('{auctionId}', {int(sellPrice)},  TO_TIMESTAMP({timeSold}), '{itemName}', '{petName}', '{petRarity}')")
+            else:
+                # normal insertion
+                # mysql cursor.execute(f"INSERT INTO auctionscanner.auctionitems (auctionId, sellPrice, timeSold, itemName) VALUES ('{auctionId}', {int(sellPrice)}, FROM_UNIXTIME({timeSold}), '{itemName}')")
+                cursor.execute(f"INSERT INTO auctionitems (auctionId, sellPrice, timesold, itemName) VALUES ('{auctionId}', {int(sellPrice)},  TO_TIMESTAMP({timeSold}), '{itemName}')")
+            mydb.commit()
+        except Exception as e:
+            print("error during database insertion")
+            print(e)
+            print("skipping iteration")
+            logger.error(f'Insertion failed on item {itemName} with auction id {auctionId} with error {str(e)}')
+            mydb.rollback()
+            break
+    print("Finished scanning items")
+    print("Next scan is in", nextScanTime - time.time(), "seconds.")
 
 
 
 
 
 
-
+    
 
