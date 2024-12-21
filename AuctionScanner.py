@@ -39,7 +39,7 @@ mydb = mysql.connector.connect(
 )
 """
 mydb = psycopg2.connect(
-    host="192.168.1.46",
+    host="localhost",
     dbname="auctionscanner",
     user="auctionscanner",
     password="auctionpassword",
@@ -158,7 +158,7 @@ while True:
             print("skipping iteration")
             logger.error(f'Insertion failed on item {itemName} with auction id {auctionId} with error {str(e)}')
             mydb.rollback()
-            break
+            continue
     print("Finished scanning items")
     print("Next scan is in", nextScanTime - time.time(), "seconds.")
 
